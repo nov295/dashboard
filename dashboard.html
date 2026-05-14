@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT 数据埋点看板</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f7fa;
+    color: #0f172a;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  header {
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0 32px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 56px;
+  }
+  .logo {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .header-actions { display: flex; align-items: center; gap: 12px; color: #64748b; font-size: 13px; }
+  .header-actions .dot { width: 6px; height: 6px; background: #10b981; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    border-top: 1px solid #f1f5f9;
+  }
+  .tab {
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    color: #64748b;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .tab:hover { color: #0f172a; }
+  .tab.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    font-weight: 500;
+  }
+
+  main {
+    padding: 20px 32px 40px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  .filter-bar {
+    background: white;
+    padding: 14px 20px;
+    border-radius: 8px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 16px;
+    border: 1px solid #e2e8f0;
+    flex-wrap: wrap;
+  }
+  .filter-group { display: flex; align-items: center; gap: 8px; }
+  .filter-label { color: #64748b; font-size: 13px; font-weight: 500; }
+  .filter-select {
+    padding: 6px 28px 6px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 4l3 3 3-3' stroke='%2364748b' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>") no-repeat right 10px center;
+    font-size: 13px;
+    cursor: pointer;
+    color: #0f172a;
+    min-width: 110px;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .filter-select:hover { border-color: #cbd5e1; }
+  .filter-spacer { flex: 1; }
+  .btn {
+    padding: 6px 14px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #475569;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: #f8fafc; border-color: #cbd5e1; }
+  .btn-primary { background: #2563eb; color: white; border-color: #2563eb; }
+  .btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .kpi-grid.kpi-grid-5 { grid-template-columns: repeat(5, 1fr); }
+  .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(6, 1fr); }
+  .kpi-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card:hover { box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06); transform: translateY(-1px); }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+  }
+  .kpi-card.total::before { background: #3b82f6; }
+  .kpi-card.online::before { background: #10b981; }
+  .kpi-card.offline::before { background: #94a3b8; }
+  .kpi-card.inactive::before { background: #f59e0b; }
+  .kpi-card.paid-card::before { background: #8b5cf6; }
+  .kpi-card.grace-card::before { background: #f97316; }
+  .kpi-card.expired-card::before { background: #ef4444; }
+  .kpi-rule {
+    font-size: 12px;
+    color: #64748b;
+    line-height: 1.5;
+  }
+  .kpi-label {
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .kpi-icon {
+    font-size: 16px;
+    opacity: 0.7;
+  }
+  .kpi-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi-trend {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #64748b;
+  }
+  .kpi-trend-pct { font-weight: 600; display: inline-flex; align-items: center; gap: 2px; }
+  .kpi-trend-pct.up { color: #10b981; }
+  .kpi-trend-pct.down { color: #ef4444; }
+
+  .charts-grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .charts-grid.two-col { grid-template-columns: 1fr 1fr; }
+  .charts-grid.three-col { grid-template-columns: 1fr 1fr 1fr; }
+  .charts-grid.one-two { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+  }
+  .card + .card { margin-top: 16px; }
+  .charts-grid + .card { margin-top: 0; }
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 32px;
+  }
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title-bar {
+    width: 3px;
+    height: 14px;
+    background: #2563eb;
+    border-radius: 2px;
+  }
+  .card-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .card-actions .filter-select {
+    min-width: auto;
+    padding: 4px 24px 4px 10px;
+    font-size: 12px;
+    background-position: right 8px center;
+  }
+  .seg-control {
+    display: inline-flex;
+    background: #f1f5f9;
+    padding: 2px;
+    border-radius: 6px;
+  }
+  .seg-control button {
+    border: none;
+    background: transparent;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #64748b;
+    border-radius: 4px;
+    transition: all 0.15s;
+  }
+  .seg-control button.active {
+    background: white;
+    color: #0f172a;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    font-weight: 500;
+  }
+  .chart-container { height: 320px; }
+  .chart-container.compact { height: 280px; }
+
+  .table-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px dashed #e2e8f0;
+  }
+  .table-filter-item { display: flex; align-items: center; gap: 6px; }
+  .table-filter-item .filter-label { font-size: 12px; }
+  .table-filter-item .filter-select { min-width: 100px; padding: 4px 24px 4px 10px; font-size: 12px; }
+
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    padding: 12px;
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 500;
+    border-bottom: 1px solid #e2e8f0;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  td {
+    padding: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    white-space: nowrap;
+  }
+  tbody tr { transition: background 0.15s; }
+  tbody tr:hover { background: #f8fafc; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .badge-online { background: #d1fae5; color: #065f46; }
+  .badge-online::before { background: #10b981; }
+  .badge-offline { background: #f1f5f9; color: #475569; }
+  .badge-offline::before { background: #94a3b8; }
+  .badge-inactive { background: #fef3c7; color: #92400e; }
+  .badge-inactive::before { background: #f59e0b; }
+  .badge-active { background: #dbeafe; color: #1e40af; }
+  .badge-expired { background: #fee2e2; color: #991b1b; }
+
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    color: #64748b;
+    font-size: 13px;
+  }
+  .pagination-controls { display: flex; gap: 4px; align-items: center; }
+  .pagination-controls button {
+    min-width: 28px;
+    height: 28px;
+    padding: 0 8px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #475569;
+    font-size: 13px;
+  }
+  .pagination-controls button:hover:not(:disabled) { background: #f1f5f9; }
+  .pagination-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pagination-controls button.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: #94a3b8;
+  }
+  .empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+  .empty-state h3 { color: #475569; margin-bottom: 8px; font-size: 16px; }
+  .empty-state ul {
+    text-align: left;
+    max-width: 400px;
+    margin: 16px auto;
+    color: #64748b;
+    line-height: 2;
+    font-size: 13px;
+  }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 1280px) {
+    .kpi-grid.kpi-grid-5 { grid-template-columns: repeat(3, 1fr); }
+    .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 1280px) {
+    .charts-grid.three-col { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 1100px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .kpi-grid.kpi-grid-5 { grid-template-columns: repeat(2, 1fr); }
+    .kpi-grid.kpi-grid-6 { grid-template-columns: repeat(2, 1fr); }
+    .charts-grid.two-col,
+    .charts-grid.three-col,
+    .charts-grid.one-two { grid-template-columns: 1fr; }
+  }
+
+  .kpi-card.clickable { cursor: pointer; }
+  .kpi-card.clickable:hover { box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08); transform: translateY(-2px); }
+  .kpi-card .kpi-drill {
+    margin-top: 8px; font-size: 12px; color: #2563eb;
+    display: inline-flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 0.15s;
+  }
+  .kpi-card.clickable:hover .kpi-drill { opacity: 1; }
+  .detail-header { display: flex; align-items: center; gap: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="logo">
+      <div class="logo-icon">io</div>
+      IoT 数据埋点看板
+    </div>
+    <div class="header-actions">
+      <span><span class="dot"></span>数据正常</span>
+      <span>更新时间:<span id="updateTime">--</span></span>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-view="device">设备数据</button>
+    <button class="tab" data-view="enterprise">企业数据</button>
+  </div>
+</header>
+
+<main>
+  <!-- 设备数据 -->
+  <section id="view-device">
+
+    <!-- 全局筛选 -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <span class="filter-label">地区</span>
+        <select class="filter-select" id="globalRegion">
+          <option value="all">全部</option>
+          <option value="CN">CN 中国</option>
+          <option value="US">US 北美</option>
+          <option value="EU">EU 欧洲</option>
+          <option value="Asia">Asia 亚太</option>
+        </select>
+      </div>
+      <div class="filter-spacer"></div>
+      <button class="btn" id="refreshBtn">⟳ 刷新</button>
+      <button class="btn btn-primary">导出报表</button>
+    </div>
+
+    <!-- KPI 卡片 -->
+    <div class="kpi-grid">
+      <div class="kpi-card total">
+        <div class="kpi-label">设备总数 <span class="kpi-icon">📦</span></div>
+        <div class="kpi-value" id="kpiTotal">--</div>
+        <div class="kpi-trend">较上月 <span class="kpi-trend-pct up" id="kpiTotalTrend">--</span></div>
+      </div>
+      <div class="kpi-card online">
+        <div class="kpi-label">在线设备 <span class="kpi-icon">🟢</span></div>
+        <div class="kpi-value" id="kpiOnline">--</div>
+        <div class="kpi-trend">较上月 <span class="kpi-trend-pct up" id="kpiOnlineTrend">--</span></div>
+      </div>
+      <div class="kpi-card offline">
+        <div class="kpi-label">离线设备 <span class="kpi-icon">⚪</span></div>
+        <div class="kpi-value" id="kpiOffline">--</div>
+        <div class="kpi-trend">较上月 <span class="kpi-trend-pct down" id="kpiOfflineTrend">--</span></div>
+      </div>
+      <div class="kpi-card inactive">
+        <div class="kpi-label">未连接 <span class="kpi-icon">🟠</span></div>
+        <div class="kpi-value" id="kpiInactive">--</div>
+        <div class="kpi-trend">较上月 <span class="kpi-trend-pct down" id="kpiInactiveTrend">--</span></div>
+      </div>
+    </div>
+
+    <!-- 产品分布:三个条形图(产品名称 / 产品型号 / 产品类型) -->
+    <div class="charts-grid three-col">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-bar"></span>产品名称设备分布</div>
+          <div class="card-actions">
+            <select class="filter-select" id="productBarStatus">
+              <option value="all">全部状态</option>
+              <option value="online">在线</option>
+              <option value="offline">离线</option>
+              <option value="inactive">未连接</option>
+            </select>
+          </div>
+        </div>
+        <div id="productBar" class="chart-container compact"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-bar"></span>产品型号设备分布</div>
+          <div class="card-actions">
+            <select class="filter-select" id="modelBarStatus">
+              <option value="all">全部状态</option>
+              <option value="online">在线</option>
+              <option value="offline">离线</option>
+              <option value="inactive">未连接</option>
+            </select>
+          </div>
+        </div>
+        <div id="modelBar" class="chart-container compact"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-bar"></span>产品类型设备分布</div>
+          <div class="card-actions">
+            <select class="filter-select" id="categoryBarStatus">
+              <option value="all">全部状态</option>
+              <option value="online">在线</option>
+              <option value="offline">离线</option>
+              <option value="inactive">未连接</option>
+            </select>
+          </div>
+        </div>
+        <div id="categoryBar" class="chart-container compact"></div>
+      </div>
+    </div>
+
+    <!-- 版本分布:固件 / 物模型 / profile -->
+    <div class="charts-grid three-col">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-bar"></span>固件版本设备数量排序</div>
+          <div class="card-actions">
+            <select class="filter-select" data-fw-key="status">
+              <option value="all">全部状态</option>
+              <option value="online">在线</option>
+              <option value="offline">离线</option>
+              <option value="inactive">未连接</option>
+            </select>
+            <select class="filter-select" data-fw-key="product">
+              <option value="all">全部产品</option>
+              <option value="智能网关">智能网关</option>
+              <option value="环境传感器">环境传感器</option>
+              <option value="温控器">温控器</option>
+              <option value="智能插座">智能插座</option>
+            </select>
+            <select class="filter-select" data-fw-key="model" id="fwModelSelect">
+              <option value="all">全部型号</option>
+            </select>
+          </div>
+        </div>
+        <div id="fwBar" class="chart-container compact"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-bar"></span>物模型版本设备数量排序</div>
+          <div class="card-actions">
+            <select class="filter-select" data-tsl-key="status">
+              <option value="all">全部状态</option>
+              <option value="online">在线</option>
+              <option value="offline">离线</option>
+              <option value="inactive">未连接</option>
+            </select>
+            <select class="filter-select" data-tsl-key="product">
+              <option value="all">全部产品</option>
+              <option value="智能网关">智能网关</option>
+              <option value="环境传感器">环境传感器</option>
+              <option value="温控器">温控器</option>
+              <option value="智能插座">智能插座</option>
+            </select>
+            <select class="filter-select" data-tsl-key="model" id="tslModelSelect">
+              <option value="all">全部型号</option>
+            </select>
+          </div>
+        </div>
+        <div id="tslBar" class="chart-container compact"></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-bar"></span>Profile 版本设备数量</div>
+          <div class="card-actions">
+            <select class="filter-select" data-profile-key="status">
+              <option value="all">全部状态</option>
+              <option value="online">在线</option>
+              <option value="offline">离线</option>
+              <option value="inactive">未连接</option>
+            </select>
+            <select class="filter-select" data-profile-key="product">
+              <option value="all">全部产品</option>
+              <option value="智能网关">智能网关</option>
+              <option value="环境传感器">环境传感器</option>
+              <option value="温控器">温控器</option>
+              <option value="智能插座">智能插座</option>
+            </select>
+          </div>
+        </div>
+        <div id="profileBar" class="chart-container compact"></div>
+      </div>
+    </div>
+
+    <!-- 总设备数量趋势(支持状态筛选) -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-bar"></span>总设备数量变化趋势</div>
+        <div class="card-actions">
+          <select class="filter-select" id="totalTrendStatus">
+            <option value="all">全部状态</option>
+            <option value="online">在线</option>
+            <option value="offline">离线</option>
+            <option value="inactive">未连接</option>
+          </select>
+          <select class="filter-select" id="totalTrendRange">
+            <option value="7">近 7 天</option>
+            <option value="30" selected>近 30 天</option>
+            <option value="90">近 90 天</option>
+          </select>
+        </div>
+      </div>
+      <div id="totalTrendBar" class="chart-container"></div>
+    </div>
+
+    <!-- 企业设备数量排序 -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-bar"></span>企业设备数量排序</div>
+        <div class="card-actions">
+          <select class="filter-select" id="enterpriseBarStatus">
+            <option value="all">全部状态</option>
+            <option value="online">在线</option>
+            <option value="offline">离线</option>
+            <option value="inactive">未连接</option>
+          </select>
+          <select class="filter-select" id="enterpriseBarPaid">
+            <option value="all">全部企业</option>
+            <option value="paid">付费企业</option>
+            <option value="free">免费企业</option>
+          </select>
+        </div>
+      </div>
+      <div id="enterpriseBar" class="chart-container compact"></div>
+    </div>
+
+    <!-- 设备增长趋势 -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-bar"></span>设备增长趋势</div>
+        <div class="card-actions">
+          <select class="filter-select" id="growthRange">
+            <option value="7">近 7 天</option>
+            <option value="30" selected>近 30 天</option>
+            <option value="90">近 90 天</option>
+            <option value="365">近一年</option>
+          </select>
+          <div class="seg-control" id="growthGranularity">
+            <button data-g="day" class="active">日</button>
+            <button data-g="month">月</button>
+            <button data-g="year">年</button>
+          </div>
+        </div>
+      </div>
+      <div id="growthChart" class="chart-container"></div>
+    </div>
+
+    <!-- 设备明细 -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-bar"></span>设备明细</div>
+        <div class="card-actions">
+          <button class="btn">⚙ 列设置</button>
+          <button class="btn">↓ 导出 CSV</button>
+        </div>
+      </div>
+
+      <div class="table-filters">
+        <div class="table-filter-item">
+          <span class="filter-label">在线状态</span>
+          <select class="filter-select tbl-filter" data-key="status">
+            <option value="all">全部</option>
+            <option value="online">在线</option>
+            <option value="offline">离线</option>
+            <option value="inactive">未连接</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">地区</span>
+          <select class="filter-select tbl-filter" data-key="region">
+            <option value="all">全部</option>
+            <option value="CN">CN</option><option value="US">US</option>
+            <option value="EU">EU</option><option value="Asia">Asia</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">产品名称</span>
+          <select class="filter-select tbl-filter" data-key="product">
+            <option value="all">全部</option>
+            <option value="智能网关">智能网关</option>
+            <option value="环境传感器">环境传感器</option>
+            <option value="温控器">温控器</option>
+            <option value="智能插座">智能插座</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">产品型号</span>
+          <select class="filter-select tbl-filter" data-key="model" id="tblModelSelect">
+            <option value="all">全部</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">固件版本</span>
+          <select class="filter-select tbl-filter" data-key="fw">
+            <option value="all">全部</option>
+            <option value="v1.2.3">v1.2.3</option>
+            <option value="v1.3.0">v1.3.0</option>
+            <option value="v2.0.1">v2.0.1</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">物模型版本</span>
+          <select class="filter-select tbl-filter" data-key="tsl">
+            <option value="all">全部</option>
+            <option value="1.0">1.0</option>
+            <option value="1.1">1.1</option>
+            <option value="2.0">2.0</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">企业</span>
+          <select class="filter-select tbl-filter" data-key="enterprise">
+            <option value="all">全部</option>
+            <option value="海尔智家">海尔智家</option>
+            <option value="美的集团">美的集团</option>
+            <option value="格力电器">格力电器</option>
+            <option value="小米生态">小米生态</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">服务类型</span>
+          <select class="filter-select tbl-filter" data-key="serviceType">
+            <option value="all">全部</option>
+            <option value="基础版">基础版</option>
+            <option value="标准版">标准版</option>
+            <option value="企业版">企业版</option>
+          </select>
+        </div>
+        <div class="table-filter-item">
+          <span class="filter-label">服务状态</span>
+          <select class="filter-select tbl-filter" data-key="serviceStatus">
+            <option value="all">全部</option>
+            <option value="active">生效中</option>
+            <option value="expired">已过期</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>设备 ID</th>
+              <th>状态</th>
+              <th>地区</th>
+              <th>产品名称</th>
+              <th>产品型号</th>
+              <th>固件版本</th>
+              <th>物模型版本</th>
+              <th>企业</th>
+              <th>服务类型</th>
+              <th>服务状态</th>
+              <th>最后上线</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="pagination">
+        <span id="paginationInfo">--</span>
+        <div class="pagination-controls" id="paginationControls"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 企业数据 -->
+  <section id="view-enterprise" class="hidden">
+
+    <!-- 概览页 -->
+    <div id="entOverview">
+
+    <div class="filter-bar">
+      <div class="filter-group">
+        <span class="filter-label">地区</span>
+        <select class="filter-select" id="entRegion">
+          <option value="all">全部</option>
+          <option value="CN">CN 中国</option>
+          <option value="US">US 北美</option>
+          <option value="EU">EU 欧洲</option>
+          <option value="Asia">Asia 亚太</option>
+        </select>
+      </div>
+      <div class="filter-spacer"></div>
+      <button class="btn btn-primary">导出报表</button>
+    </div>
+
+    <!-- 企业 KPI 卡片 -->
+    <div class="kpi-grid kpi-grid-6" id="entKpiGrid">
+      <div class="kpi-card total">
+        <div class="kpi-label">企业总数 <span class="kpi-icon">🏢</span></div>
+        <div class="kpi-value" id="entKpiTotal">--</div>
+        <div class="kpi-trend">较上月 <span class="kpi-trend-pct up" id="entKpiTotalTrend">--</span></div>
+      </div>
+      <div class="kpi-card paid-card clickable" data-drill="paid">
+        <div class="kpi-label">付费企业数 <span class="kpi-icon">💎</span></div>
+        <div class="kpi-value" id="entKpiPaid">--</div>
+        <div class="kpi-trend">占企业总数 <span class="kpi-trend-pct up" id="entKpiPaidPct">--</span></div>
+        <div class="kpi-drill">查看详情 →</div>
+      </div>
+      <div class="kpi-card online clickable" data-drill="active">
+        <div class="kpi-label">正常 <span class="kpi-icon">✅</span></div>
+        <div class="kpi-value" id="entKpiActive">--</div>
+        <div class="kpi-rule">距到期 &gt; 30 天</div>
+        <div class="kpi-drill">查看详情 →</div>
+      </div>
+      <div class="kpi-card inactive clickable" data-drill="expiring">
+        <div class="kpi-label">即将过期 <span class="kpi-icon">⏰</span></div>
+        <div class="kpi-value" id="entKpiExpiring">--</div>
+        <div class="kpi-rule">30 天内到期(含当天)</div>
+        <div class="kpi-drill">查看详情 →</div>
+      </div>
+      <div class="kpi-card grace-card clickable" data-drill="grace">
+        <div class="kpi-label">保护期 <span class="kpi-icon">🛡️</span></div>
+        <div class="kpi-value" id="entKpiGrace">--</div>
+        <div class="kpi-rule">已过期 ≤ 15 天(含当天)</div>
+        <div class="kpi-drill">查看详情 →</div>
+      </div>
+      <div class="kpi-card expired-card clickable" data-drill="expired">
+        <div class="kpi-label">失效期 <span class="kpi-icon">⚠️</span></div>
+        <div class="kpi-value" id="entKpiExpired">--</div>
+        <div class="kpi-rule">已过期 &gt; 15 天</div>
+        <div class="kpi-drill">查看详情 →</div>
+      </div>
+    </div>
+
+    <!-- 企业总数变化趋势 -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-bar"></span>企业总数变化趋势</div>
+        <div class="card-actions">
+          <select class="filter-select" id="entTotalTrendRange">
+            <option value="7">近 7 天</option>
+            <option value="30" selected>近 30 天</option>
+            <option value="90">近 90 天</option>
+          </select>
+        </div>
+      </div>
+      <div id="entTotalTrendChart" class="chart-container"></div>
+    </div>
+
+    <!-- 企业增长趋势 -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="card-title-bar"></span>企业增长数据</div>
+        <div class="card-actions">
+          <select class="filter-select" id="entGrowthRange">
+            <option value="7">近 7 天</option>
+            <option value="30" selected>近 30 天</option>
+            <option value="90">近 90 天</option>
+            <option value="365">近一年</option>
+          </select>
+          <div class="seg-control" id="entGrowthGranularity">
+            <button data-g="day" class="active">日</button>
+            <button data-g="month">月</button>
+            <button data-g="year">年</button>
+          </div>
+        </div>
+      </div>
+      <div id="entGrowthChart" class="chart-container"></div>
+    </div>
+    </div>
+
+    <!-- 二级:企业明细列表 -->
+    <div id="entDetail" class="hidden">
+      <div class="filter-bar">
+        <button class="btn" id="entDetailBack">← 返回企业概览</button>
+        <div class="filter-group">
+          <span class="filter-label">分类</span>
+          <span id="entDetailTitle" style="font-weight:600;color:#0f172a">--</span>
+        </div>
+        <div class="filter-spacer"></div>
+        <span style="color:#64748b;font-size:13px">共 <span id="entDetailCount">0</span> 家企业</span>
+        <button class="btn btn-primary">导出明细</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="card-title-bar"></span>企业明细</div>
+          <div class="card-actions">
+            <select class="filter-select" id="entDetailRegion">
+              <option value="all">全部地区</option>
+              <option value="CN">CN</option><option value="US">US</option>
+              <option value="EU">EU</option><option value="Asia">Asia</option>
+            </select>
+            <input class="filter-select" id="entDetailSearch" placeholder="搜索企业名称" style="min-width:160px"/>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>企业 ID</th>
+                <th>企业名称</th>
+                <th>地区</th>
+                <th>是否付费</th>
+                <th>服务状态</th>
+                <th>到期日期</th>
+                <th>注册日期</th>
+              </tr>
+            </thead>
+            <tbody id="entDetailTableBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination">
+          <span id="entDetailPagInfo">--</span>
+          <div class="pagination-controls" id="entDetailPagControls"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// ============ Mock 数据 ============
+const REGIONS = ['CN', 'US', 'EU', 'Asia'];
+const STATUSES = ['online', 'offline', 'inactive'];
+const STATUS_LABEL = { online: '在线', offline: '离线', inactive: '未连接' };
+const PRODUCTS = {
+  '智能网关':   ['IOT-G100', 'IOT-G200'],
+  '环境传感器': ['IOT-S100', 'IOT-S200'],
+  '温控器':     ['IOT-T100', 'IOT-T200'],
+  '智能插座':   ['IOT-P100', 'IOT-P200']
+};
+const PRODUCT_CATEGORY = {
+  '智能网关':   '网关类',
+  '环境传感器': '传感器类',
+  '温控器':     '控制器类',
+  '智能插座':   '执行器类'
+};
+const ALL_MODELS = Object.values(PRODUCTS).flat();
+const ENTERPRISES = ['海尔智家', '美的集团', '格力电器', '小米生态'];
+const ENTERPRISE_PAID = { '海尔智家': true, '美的集团': true, '格力电器': false, '小米生态': true };
+const FW = ['v1.2.3', 'v1.3.0', 'v2.0.1'];
+const TSL = ['1.0', '1.1', '2.0'];
+const PROFILE_VERSIONS = ['profile-1.0', 'profile-1.1', 'profile-2.0', 'profile-2.1'];
+const SERVICE_TYPES = ['基础版', '标准版', '企业版'];
+
+const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#ef4444', '#84cc16'];
+
+function rand(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// 统一设备数据源:所有图表与 KPI 均从这里聚合
+const TOTAL_DEVICES = 2000;
+const tableData = (() => {
+  const rows = [];
+  for (let i = 0; i < TOTAL_DEVICES; i++) {
+    const productName = pick(Object.keys(PRODUCTS));
+    const model = pick(PRODUCTS[productName]);
+    const enterprise = pick(ENTERPRISES);
+    rows.push({
+      id: 'DEV-' + String(100000 + i).padStart(6, '0'),
+      status: pick(['online', 'online', 'online', 'online', 'offline', 'offline', 'inactive']),
+      region: pick(REGIONS),
+      product: productName,
+      model,
+      category: PRODUCT_CATEGORY[productName],
+      fw: pick(FW),
+      tsl: pick(TSL),
+      profile: pick(PROFILE_VERSIONS),
+      enterprise,
+      isPaid: ENTERPRISE_PAID[enterprise],
+      serviceType: pick(SERVICE_TYPES),
+      serviceStatus: pick(['active', 'active', 'active', 'expired']),
+      lastOnline: '2026-05-' + String(rand(1, 9)).padStart(2, '0') + ' ' + String(rand(0, 23)).padStart(2, '0') + ':' + String(rand(0, 59)).padStart(2, '0')
+    });
+  }
+  return rows;
+})();
+
+// 生成 30 天每日新增(按状态拆分,保持原有趋势图)
+const dailyGrowth = (() => {
+  const days = 30;
+  const arr = [];
+  const today = new Date('2026-05-09');
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    arr.push({
+      date: d.toISOString().slice(0, 10),
+      online: rand(20, 80),
+      offline: rand(5, 25),
+      inactive: rand(3, 18)
+    });
+  }
+  return arr;
+})();
+
+// 生成 90 天每日累计设备总数(按状态)
+const dailyTotal = (() => {
+  const days = 90;
+  const arr = [];
+  const today = new Date('2026-05-09');
+  // 以 2000 设备为今天的基准,往前每天减一些波动
+  let online = 1280, offline = 480, inactive = 240;
+  const items = [];
+  for (let i = 0; i < days; i++) {
+    items.push({ online, offline, inactive });
+    online -= rand(2, 14);
+    offline -= rand(0, 6);
+    inactive -= rand(0, 4);
+  }
+  items.reverse();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (days - 1 - i));
+    arr.push({
+      date: d.toISOString().slice(0, 10),
+      ...items[i]
+    });
+  }
+  return arr;
+})();
+
+// 企业 Mock:300 家,字段含地区、是否付费、服务状态(active/grace/expiring/expired)、注册日期
+const ENT_TOTAL = 300;
+const ENT_STATUSES = ['active', 'grace', 'expiring', 'expired']; // 正常 / 保护期 / 即将过期 / 失效期
+const ENT_STATUS_LABEL = { active: '正常', expiring: '即将过期', grace: '保护期', expired: '失效期' };
+const ENT_NAME_PREFIX = ['海尔', '美的', '格力', '小米', '华为', '京东', '阿里', '腾讯', '百度', '联想', '海康', '大华', '中兴', 'TCL', '创维', '飞利浦', '西门子', '施耐德', '霍尼韦尔', '罗格朗'];
+const ENT_NAME_SUFFIX = ['智家', '智联', '科技', '电子', '物联', '能源', '云服务', '工业', '系统', '集团', '股份', '科技有限公司', '智能科技', '物联网', '解决方案'];
+const enterpriseData = (() => {
+  const today = new Date('2026-05-09');
+  const rows = [];
+  const usedNames = new Set();
+  for (let i = 0; i < ENT_TOTAL; i++) {
+    const reg = new Date(today);
+    reg.setDate(today.getDate() - rand(30, 730));
+    // 比例近似:active 55%, grace 10%, expiring 15%, expired 20%
+    const status = (() => {
+      const r = Math.random();
+      if (r < 0.55) return 'active';
+      if (r < 0.65) return 'grace';
+      if (r < 0.80) return 'expiring';
+      return 'expired';
+    })();
+    // 根据状态生成对应的到期日期
+    const expire = new Date(today);
+    if (status === 'active') expire.setDate(today.getDate() + rand(31, 365));
+    else if (status === 'expiring') expire.setDate(today.getDate() + rand(0, 30));
+    else if (status === 'grace') expire.setDate(today.getDate() - rand(0, 15));
+    else expire.setDate(today.getDate() - rand(16, 200));
+    // 生成不重复名称
+    let name;
+    do {
+      name = pick(ENT_NAME_PREFIX) + pick(ENT_NAME_SUFFIX);
+    } while (usedNames.has(name) && usedNames.size < ENT_NAME_PREFIX.length * ENT_NAME_SUFFIX.length);
+    usedNames.add(name);
+    rows.push({
+      id: 'ENT-' + String(10000 + i).padStart(5, '0'),
+      name,
+      region: pick(REGIONS),
+      isPaid: Math.random() < 0.62,
+      status,
+      registerDate: reg.toISOString().slice(0, 10),
+      expireDate: expire.toISOString().slice(0, 10)
+    });
+  }
+  return rows;
+})();
+
+// 企业每日新增(近 365 天)
+const entDailyGrowth = (() => {
+  const today = new Date('2026-05-09');
+  const arr = [];
+  for (let i = 364; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    arr.push({
+      date: d.toISOString().slice(0, 10),
+      region: { CN: rand(0, 4), US: rand(0, 3), EU: rand(0, 3), Asia: rand(0, 3) }
+    });
+  }
+  return arr;
+})();
+
+// 企业总数累计(近 90 天)
+const entDailyTotal = (() => {
+  const today = new Date('2026-05-09');
+  const arr = [];
+  let total = 300;
+  const items = [];
+  for (let i = 0; i < 90; i++) {
+    items.push(total);
+    total -= rand(0, 3);
+  }
+  items.reverse();
+  for (let i = 0; i < 90; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (89 - i));
+    arr.push({ date: d.toISOString().slice(0, 10), total: items[i] });
+  }
+  return arr;
+})();
+
+// ============ 状态 ============
+const state = {
+  region: 'all',
+  range: 30,
+  productBarStatus: 'all',
+  modelBarStatus: 'all',
+  categoryBarStatus: 'all',
+  fwBar: { status: 'all', product: 'all', model: 'all' },
+  tslBar: { status: 'all', product: 'all', model: 'all' },
+  profileBar: { status: 'all', product: 'all' },
+  totalTrend: { status: 'all', range: 30 },
+  enterpriseBar: { status: 'all', paid: 'all' },
+  entRegion: 'all',
+  entGrowthRange: 30,
+  entGrowthGranularity: 'day',
+  entTotalTrendRange: 30,
+  growthGranularity: 'day',
+  table: { status: 'all', region: 'all', product: 'all', model: 'all', fw: 'all', tsl: 'all', enterprise: 'all', serviceType: 'all', serviceStatus: 'all' },
+  page: 1,
+  pageSize: 10,
+  entDetail: { type: null, region: 'all', search: '', page: 1, pageSize: 10 }
+};
+
+// ============ 工具 ============
+function fmtNum(n) { return n.toLocaleString('en-US'); }
+function trendStr(pct) {
+  const arrow = pct >= 0 ? '▲' : '▼';
+  return arrow + ' ' + Math.abs(pct).toFixed(1) + '%';
+}
+
+// 通用过滤器:对 tableData 按传入条件做过滤
+function filterDevices(conditions = {}) {
+  return tableData.filter(row => {
+    for (const key of Object.keys(conditions)) {
+      const v = conditions[key];
+      if (v == null || v === 'all') continue;
+      if (row[key] !== v) return false;
+    }
+    return true;
+  });
+}
+
+// 按某字段聚合计数
+function countBy(rows, key) {
+  const counts = {};
+  rows.forEach(r => { counts[r[key]] = (counts[r[key]] || 0) + 1; });
+  return counts;
+}
+
+// 填充产品型号下拉(初始化所有型号)
+function populateModelSelect(selectEl, productValue) {
+  const currentValue = selectEl.value;
+  selectEl.innerHTML = '<option value="all">全部型号</option>';
+  const models = (productValue == null || productValue === 'all') ? ALL_MODELS : (PRODUCTS[productValue] || []);
+  models.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m;
+    selectEl.appendChild(opt);
+  });
+  if (currentValue !== 'all' && models.includes(currentValue)) {
+    selectEl.value = currentValue;
+    return currentValue;
+  }
+  selectEl.value = 'all';
+  return 'all';
+}
+
+// ============ 图表实例 ============
+const productBarChart = echarts.init(document.getElementById('productBar'));
+const modelBarChart = echarts.init(document.getElementById('modelBar'));
+const categoryBarChart = echarts.init(document.getElementById('categoryBar'));
+const fwBarChart = echarts.init(document.getElementById('fwBar'));
+const tslBarChart = echarts.init(document.getElementById('tslBar'));
+const profileBarChart = echarts.init(document.getElementById('profileBar'));
+const enterpriseBarChart = echarts.init(document.getElementById('enterpriseBar'));
+const totalTrendChart = echarts.init(document.getElementById('totalTrendBar'));
+const growthChart = echarts.init(document.getElementById('growthChart'));
+const entGrowthChart = echarts.init(document.getElementById('entGrowthChart'));
+const entTotalTrendChart = echarts.init(document.getElementById('entTotalTrendChart'));
+
+// ============ 渲染:KPI ============
+function renderKPI() {
+  const rows = filterDevices({ region: state.region });
+  const counts = { total: rows.length, online: 0, offline: 0, inactive: 0 };
+  rows.forEach(r => { counts[r.status]++; });
+  document.getElementById('kpiTotal').textContent = fmtNum(counts.total);
+  document.getElementById('kpiOnline').textContent = fmtNum(counts.online);
+  document.getElementById('kpiOffline').textContent = fmtNum(counts.offline);
+  document.getElementById('kpiInactive').textContent = fmtNum(counts.inactive);
+
+  const trends = { total: 4.2, online: 5.8, offline: -2.1, inactive: -3.4 };
+  const setTrend = (id, pct) => {
+    const el = document.getElementById(id);
+    el.textContent = trendStr(pct);
+    el.className = 'kpi-trend-pct ' + (pct >= 0 ? 'up' : 'down');
+  };
+  setTrend('kpiTotalTrend', trends.total);
+  setTrend('kpiOnlineTrend', trends.online);
+  setTrend('kpiOfflineTrend', trends.offline);
+  setTrend('kpiInactiveTrend', trends.inactive);
+}
+
+// ============ 渲染:产品/型号/类型条形图 ============
+function renderProductBar() {
+  const rows = filterDevices({ region: state.region, status: state.productBarStatus });
+  renderHBar(productBarChart, rows, 'product', '#3b82f6');
+}
+function renderModelBar() {
+  const rows = filterDevices({ region: state.region, status: state.modelBarStatus });
+  renderHBar(modelBarChart, rows, 'model', '#8b5cf6');
+}
+function renderCategoryBar() {
+  const rows = filterDevices({ region: state.region, status: state.categoryBarStatus });
+  renderHBar(categoryBarChart, rows, 'category', '#ec4899');
+}
+
+// ============ 渲染:横向条形图通用 ============
+function renderHBar(chart, rows, groupKey, color) {
+  const counts = countBy(rows, groupKey);
+  const items = Object.entries(counts).sort((a, b) => a[1] - b[1]); // 升序,y 轴默认从下往上,这样最大值在顶部
+  const names = items.map(x => x[0]);
+  const values = items.map(x => x[1]);
+  const maxVal = values.length ? Math.max.apply(null, values) : 0;
+  chart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: p => `${p[0].name}<br/>设备数:${fmtNum(p[0].value)}` },
+    grid: { top: 20, left: 20, right: 50, bottom: 30, containLabel: true },
+    xAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#64748b', fontSize: 11 }
+    },
+    yAxis: {
+      type: 'category',
+      data: names,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#475569', fontSize: 12 }
+    },
+    series: [{
+      type: 'bar',
+      data: values,
+      barMaxWidth: 22,
+      itemStyle: { color, borderRadius: [0, 4, 4, 0] },
+      label: {
+        show: true, position: 'right',
+        color: '#475569', fontSize: 11,
+        formatter: p => fmtNum(p.value)
+      },
+      emphasis: { itemStyle: { color: color } }
+    }],
+    // 预留右侧空间给数据标签
+    ...(maxVal > 0 ? {} : {})
+  }, true);
+}
+
+function renderFwBar() {
+  const rows = filterDevices({
+    region: state.region,
+    status: state.fwBar.status,
+    product: state.fwBar.product,
+    model: state.fwBar.model
+  });
+  renderHBar(fwBarChart, rows, 'fw', '#3b82f6');
+}
+
+function renderTslBar() {
+  const rows = filterDevices({
+    region: state.region,
+    status: state.tslBar.status,
+    product: state.tslBar.product,
+    model: state.tslBar.model
+  });
+  renderHBar(tslBarChart, rows, 'tsl', '#8b5cf6');
+}
+
+function renderProfileBar() {
+  const rows = filterDevices({
+    region: state.region,
+    status: state.profileBar.status,
+    product: state.profileBar.product
+  });
+  renderHBar(profileBarChart, rows, 'profile', '#10b981');
+}
+
+// 总设备数量趋势:柱状图,可按状态筛选
+function renderTotalTrendBar() {
+  const days = Math.min(state.totalTrend.range, dailyTotal.length);
+  const slice = dailyTotal.slice(-days);
+  const dates = slice.map(d => d.date.slice(5));
+  const status = state.totalTrend.status;
+  const values = slice.map(d => {
+    if (status === 'all') return d.online + d.offline + d.inactive;
+    return d[status];
+  });
+  const colorMap = { all: '#2563eb', online: '#10b981', offline: '#94a3b8', inactive: '#f59e0b' };
+  const labelMap = { all: '设备总数', online: '在线设备', offline: '离线设备', inactive: '未连接设备' };
+  totalTrendChart.setOption({
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: p => `${p[0].name}<br/>${labelMap[status]}:${fmtNum(p[0].value)}`
+    },
+    grid: { top: 30, left: 50, right: 30, bottom: 40 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLabel: { color: '#64748b', fontSize: 11, interval: Math.max(0, Math.floor(days / 15)) }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#64748b', fontSize: 11 }
+    },
+    series: [{
+      name: labelMap[status],
+      type: 'bar',
+      data: values,
+      barMaxWidth: 18,
+      itemStyle: { color: colorMap[status], borderRadius: [3, 3, 0, 0] }
+    }]
+  }, true);
+}
+
+function renderEnterpriseBar() {
+  const conditions = { region: state.region, status: state.enterpriseBar.status };
+  if (state.enterpriseBar.paid !== 'all') {
+    conditions.isPaid = state.enterpriseBar.paid === 'paid';
+  }
+  const rows = filterDevices(conditions);
+  renderHBar(enterpriseBarChart, rows, 'enterprise', '#06b6d4');
+}
+
+// ============ 渲染:增长趋势 ============
+function renderGrowth() {
+  let dates, totals;
+  if (state.growthGranularity === 'day') {
+    const data = dailyGrowth.slice(-Math.min(state.range, 30));
+    dates = data.map(d => d.date.slice(5));
+    totals = data.map(d => d.online + d.offline + d.inactive);
+  } else if (state.growthGranularity === 'month') {
+    dates = ['1月','2月','3月','4月','5月'];
+    totals = dates.map(() => rand(1100, 2700));
+  } else {
+    dates = ['2022', '2023', '2024', '2025', '2026'];
+    totals = dates.map(() => rand(11000, 30000));
+  }
+
+  growthChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'line' }, formatter: p => `${p[0].name}<br/>合计:${fmtNum(p[0].value)}` },
+    grid: { top: 30, left: 50, right: 30, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLabel: { color: '#64748b', fontSize: 11 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#64748b', fontSize: 11 }
+    },
+    series: [{
+      name: '合计',
+      type: 'line',
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      data: totals,
+      itemStyle: { color: '#2563eb' },
+      lineStyle: { width: 2 },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(37, 99, 235, 0.18)' },
+            { offset: 1, color: 'rgba(37, 99, 235, 0.0)' }
+          ]
+        }
+      }
+    }]
+  }, true);
+}
+
+// ============ 渲染:明细表 ============
+function getFilteredTable() {
+  return tableData.filter(row => {
+    const f = state.table;
+    if (state.region !== 'all' && row.region !== state.region) return false;
+    for (const key of Object.keys(f)) {
+      if (f[key] !== 'all' && row[key] !== f[key]) return false;
+    }
+    return true;
+  });
+}
+
+function renderTable() {
+  const rows = getFilteredTable();
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+  if (state.page > totalPages) state.page = totalPages;
+  const start = (state.page - 1) * state.pageSize;
+  const pageRows = rows.slice(start, start + state.pageSize);
+
+  const statusBadge = {
+    online: '<span class="badge badge-online">在线</span>',
+    offline: '<span class="badge badge-offline">离线</span>',
+    inactive: '<span class="badge badge-inactive">未连接</span>'
+  };
+  const svcBadge = {
+    active: '<span class="badge badge-active">生效中</span>',
+    expired: '<span class="badge badge-expired">已过期</span>'
+  };
+
+  document.getElementById('tableBody').innerHTML = pageRows.map(r => `
+    <tr>
+      <td style="font-family:monospace;color:#475569">${r.id}</td>
+      <td>${statusBadge[r.status]}</td>
+      <td>${r.region}</td>
+      <td>${r.product}</td>
+      <td>${r.model}</td>
+      <td>${r.fw}</td>
+      <td>${r.tsl}</td>
+      <td>${r.enterprise}</td>
+      <td>${r.serviceType}</td>
+      <td>${svcBadge[r.serviceStatus]}</td>
+      <td style="color:#64748b">${r.lastOnline}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="11" style="text-align:center;padding:40px;color:#94a3b8">暂无符合条件的数据</td></tr>';
+
+  document.getElementById('paginationInfo').textContent = `共 ${total} 条,第 ${state.page} / ${totalPages} 页`;
+
+  const ctrl = document.getElementById('paginationControls');
+  let html = `<button ${state.page === 1 ? 'disabled' : ''} data-action="prev">‹</button>`;
+  const showPages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - state.page) <= 1) showPages.push(i);
+    else if (showPages[showPages.length - 1] !== '...') showPages.push('...');
+  }
+  showPages.forEach(p => {
+    if (p === '...') html += `<span style="padding:0 4px;color:#94a3b8">...</span>`;
+    else html += `<button class="${p === state.page ? 'active' : ''}" data-page="${p}">${p}</button>`;
+  });
+  html += `<button ${state.page === totalPages ? 'disabled' : ''} data-action="next">›</button>`;
+  ctrl.innerHTML = html;
+}
+
+// ============ 渲染:企业 KPI ============
+function renderEnterpriseKPI() {
+  const rows = state.entRegion === 'all' ? enterpriseData : enterpriseData.filter(r => r.region === state.entRegion);
+  const total = rows.length;
+  const paid = rows.filter(r => r.isPaid).length;
+  const expiring = rows.filter(r => r.status === 'expiring').length;
+  const expired = rows.filter(r => r.status === 'expired').length;
+  const active = rows.filter(r => r.status === 'active').length;
+  const grace = rows.filter(r => r.status === 'grace').length;
+  const paidPct = total > 0 ? (paid / total * 100) : 0;
+
+  document.getElementById('entKpiTotal').textContent = fmtNum(total);
+  document.getElementById('entKpiPaid').textContent = fmtNum(paid);
+  document.getElementById('entKpiPaidPct').textContent = paidPct.toFixed(1) + '%';
+  document.getElementById('entKpiActive').textContent = fmtNum(active);
+  document.getElementById('entKpiExpiring').textContent = fmtNum(expiring);
+  document.getElementById('entKpiGrace').textContent = fmtNum(grace);
+  document.getElementById('entKpiExpired').textContent = fmtNum(expired);
+
+  document.getElementById('entKpiTotalTrend').textContent = trendStr(3.6);
+  document.getElementById('entKpiTotalTrend').className = 'kpi-trend-pct up';
+}
+
+// ============ 渲染:企业总数变化趋势 ============
+function renderEntTotalTrend() {
+  const days = Math.min(state.entTotalTrendRange, entDailyTotal.length);
+  const slice = entDailyTotal.slice(-days);
+  const dates = slice.map(d => d.date.slice(5));
+  const values = slice.map(d => d.total);
+  entTotalTrendChart.setOption({
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: p => `${p[0].name}<br/>企业总数:${fmtNum(p[0].value)}`
+    },
+    grid: { top: 30, left: 50, right: 30, bottom: 40 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLabel: { color: '#64748b', fontSize: 11, interval: Math.max(0, Math.floor(days / 15)) }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#64748b', fontSize: 11 },
+      min: v => Math.floor(v.min * 0.98)
+    },
+    series: [{
+      name: '企业总数',
+      type: 'line',
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 5,
+      data: values,
+      itemStyle: { color: '#3b82f6' },
+      lineStyle: { width: 2 },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(59, 130, 246, 0.18)' },
+            { offset: 1, color: 'rgba(59, 130, 246, 0.0)' }
+          ]
+        }
+      }
+    }]
+  }, true);
+}
+
+// ============ 渲染:企业增长趋势 ============
+function renderEntGrowth() {
+  let dates, totals;
+  if (state.entGrowthGranularity === 'day') {
+    const days = Math.min(state.entGrowthRange, 365);
+    const slice = entDailyGrowth.slice(-days);
+    dates = slice.map(d => d.date.slice(5));
+    totals = slice.map(d => {
+      if (state.entRegion === 'all') return d.region.CN + d.region.US + d.region.EU + d.region.Asia;
+      return d.region[state.entRegion];
+    });
+  } else if (state.entGrowthGranularity === 'month') {
+    dates = ['2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05'];
+    const base = state.entRegion === 'all' ? [60, 110] : [15, 35];
+    totals = dates.map(() => rand(base[0], base[1]));
+  } else {
+    dates = ['2022', '2023', '2024', '2025', '2026'];
+    const base = state.entRegion === 'all' ? [400, 1000] : [100, 280];
+    totals = dates.map(() => rand(base[0], base[1]));
+  }
+
+  entGrowthChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'line' }, formatter: p => `${p[0].name}<br/>新增企业:${fmtNum(p[0].value)}` },
+    grid: { top: 30, left: 50, right: 30, bottom: 30 },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLabel: { color: '#64748b', fontSize: 11 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: '#f1f5f9' } },
+      axisLabel: { color: '#64748b', fontSize: 11 }
+    },
+    series: [{
+      name: '新增企业',
+      type: 'line',
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      data: totals,
+      itemStyle: { color: '#8b5cf6' },
+      lineStyle: { width: 2 },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(139, 92, 246, 0.22)' },
+            { offset: 1, color: 'rgba(139, 92, 246, 0.0)' }
+          ]
+        }
+      }
+    }]
+  }, true);
+}
+
+function renderEnterpriseAll() {
+  renderEnterpriseKPI();
+  renderEntTotalTrend();
+  renderEntGrowth();
+}
+
+// ============ 企业下钻:二级明细页 ============
+const DRILL_TITLE = {
+  paid: '付费企业',
+  active: '正常企业 (距到期 > 30 天)',
+  expiring: '即将过期企业 (30 天内到期)',
+  grace: '保护期企业 (已过期 ≤ 15 天)',
+  expired: '失效期企业 (已过期 > 15 天)'
+};
+
+function getDrillRows(type) {
+  let rows = state.entRegion === 'all' ? enterpriseData : enterpriseData.filter(r => r.region === state.entRegion);
+  if (type === 'paid') return rows.filter(r => r.isPaid);
+  return rows.filter(r => r.status === type);
+}
+
+function openEntDetail(type) {
+  state.entDetail.type = type;
+  state.entDetail.region = 'all';
+  state.entDetail.search = '';
+  state.entDetail.page = 1;
+  document.getElementById('entOverview').classList.add('hidden');
+  document.getElementById('entDetail').classList.remove('hidden');
+  document.getElementById('entDetailTitle').textContent = DRILL_TITLE[type] || '--';
+  document.getElementById('entDetailRegion').value = 'all';
+  document.getElementById('entDetailSearch').value = '';
+  renderEntDetail();
+}
+
+function closeEntDetail() {
+  state.entDetail.type = null;
+  document.getElementById('entDetail').classList.add('hidden');
+  document.getElementById('entOverview').classList.remove('hidden');
+}
+
+function renderEntDetail() {
+  const type = state.entDetail.type;
+  if (!type) return;
+  let rows = getDrillRows(type);
+  if (state.entDetail.region !== 'all') rows = rows.filter(r => r.region === state.entDetail.region);
+  const kw = state.entDetail.search.trim().toLowerCase();
+  if (kw) rows = rows.filter(r => r.name.toLowerCase().includes(kw) || r.id.toLowerCase().includes(kw));
+
+  const total = rows.length;
+  document.getElementById('entDetailCount').textContent = fmtNum(total);
+
+  const totalPages = Math.max(1, Math.ceil(total / state.entDetail.pageSize));
+  if (state.entDetail.page > totalPages) state.entDetail.page = totalPages;
+  const start = (state.entDetail.page - 1) * state.entDetail.pageSize;
+  const pageRows = rows.slice(start, start + state.entDetail.pageSize);
+
+  const statusBadge = {
+    active: '<span class="badge badge-online">正常</span>',
+    expiring: '<span class="badge badge-inactive">即将过期</span>',
+    grace: '<span class="badge badge-active">保护期</span>',
+    expired: '<span class="badge badge-expired">失效期</span>'
+  };
+
+  document.getElementById('entDetailTableBody').innerHTML = pageRows.map(r => `
+    <tr>
+      <td style="font-family:monospace;color:#475569">${r.id}</td>
+      <td style="font-weight:500;color:#0f172a">${r.name}</td>
+      <td>${r.region}</td>
+      <td>${r.isPaid ? '<span class="badge badge-active">付费</span>' : '<span class="badge badge-offline">免费</span>'}</td>
+      <td>${statusBadge[r.status]}</td>
+      <td style="color:#64748b">${r.expireDate}</td>
+      <td style="color:#64748b">${r.registerDate}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" style="text-align:center;padding:40px;color:#94a3b8">暂无符合条件的企业</td></tr>';
+
+  document.getElementById('entDetailPagInfo').textContent = `共 ${total} 家,第 ${state.entDetail.page} / ${totalPages} 页`;
+  const ctrl = document.getElementById('entDetailPagControls');
+  let html = `<button ${state.entDetail.page === 1 ? 'disabled' : ''} data-action="prev">‹</button>`;
+  const showPages = [];
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || Math.abs(i - state.entDetail.page) <= 1) showPages.push(i);
+    else if (showPages[showPages.length - 1] !== '...') showPages.push('...');
+  }
+  showPages.forEach(p => {
+    if (p === '...') html += `<span style="padding:0 4px;color:#94a3b8">...</span>`;
+    else html += `<button class="${p === state.entDetail.page ? 'active' : ''}" data-page="${p}">${p}</button>`;
+  });
+  html += `<button ${state.entDetail.page === totalPages ? 'disabled' : ''} data-action="next">›</button>`;
+  ctrl.innerHTML = html;
+}
+
+// ============ 初始化型号下拉 ============
+populateModelSelect(document.getElementById('fwModelSelect'), 'all');
+populateModelSelect(document.getElementById('tslModelSelect'), 'all');
+populateModelSelect(document.getElementById('tblModelSelect'), 'all');
+
+// ============ 事件绑定 ============
+// 全局筛选:地区变化影响所有图表
+document.getElementById('globalRegion').addEventListener('change', e => {
+  state.region = e.target.value;
+  renderAll();
+});
+document.getElementById('growthRange').addEventListener('change', e => {
+  state.range = parseInt(e.target.value);
+  renderGrowth();
+});
+
+// 产品/型号/类型 条形图状态筛选
+document.getElementById('productBarStatus').addEventListener('change', e => {
+  state.productBarStatus = e.target.value;
+  renderProductBar();
+});
+document.getElementById('modelBarStatus').addEventListener('change', e => {
+  state.modelBarStatus = e.target.value;
+  renderModelBar();
+});
+document.getElementById('categoryBarStatus').addEventListener('change', e => {
+  state.categoryBarStatus = e.target.value;
+  renderCategoryBar();
+});
+
+// 固件版本条形图筛选(状态/产品/型号,产品->型号联动)
+document.querySelectorAll('[data-fw-key]').forEach(sel => {
+  sel.addEventListener('change', e => {
+    const key = e.target.dataset.fwKey;
+    state.fwBar[key] = e.target.value;
+    if (key === 'product') {
+      const newModel = populateModelSelect(document.getElementById('fwModelSelect'), e.target.value);
+      state.fwBar.model = newModel;
+    }
+    renderFwBar();
+  });
+});
+
+// 物模型版本条形图筛选
+document.querySelectorAll('[data-tsl-key]').forEach(sel => {
+  sel.addEventListener('change', e => {
+    const key = e.target.dataset.tslKey;
+    state.tslBar[key] = e.target.value;
+    if (key === 'product') {
+      const newModel = populateModelSelect(document.getElementById('tslModelSelect'), e.target.value);
+      state.tslBar.model = newModel;
+    }
+    renderTslBar();
+  });
+});
+
+// profile 版本条形图筛选
+document.querySelectorAll('[data-profile-key]').forEach(sel => {
+  sel.addEventListener('change', e => {
+    const key = e.target.dataset.profileKey;
+    state.profileBar[key] = e.target.value;
+    renderProfileBar();
+  });
+});
+
+// 总设备数量趋势筛选
+document.getElementById('totalTrendStatus').addEventListener('change', e => {
+  state.totalTrend.status = e.target.value;
+  renderTotalTrendBar();
+});
+document.getElementById('totalTrendRange').addEventListener('change', e => {
+  state.totalTrend.range = parseInt(e.target.value);
+  renderTotalTrendBar();
+});
+
+// 企业条形图状态筛选
+document.getElementById('enterpriseBarStatus').addEventListener('change', e => {
+  state.enterpriseBar.status = e.target.value;
+  renderEnterpriseBar();
+});
+document.getElementById('enterpriseBarPaid').addEventListener('change', e => {
+  state.enterpriseBar.paid = e.target.value;
+  renderEnterpriseBar();
+});
+
+// 增长趋势粒度切换
+document.querySelectorAll('#growthGranularity button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#growthGranularity button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.growthGranularity = btn.dataset.g;
+    renderGrowth();
+  });
+});
+
+// 明细表筛选(产品->型号联动)
+document.querySelectorAll('.tbl-filter').forEach(sel => {
+  sel.addEventListener('change', e => {
+    const key = e.target.dataset.key;
+    state.table[key] = e.target.value;
+    if (key === 'product') {
+      const newModel = populateModelSelect(document.getElementById('tblModelSelect'), e.target.value);
+      state.table.model = newModel;
+    }
+    state.page = 1;
+    renderTable();
+  });
+});
+
+// 分页
+document.getElementById('paginationControls').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.action === 'prev') state.page--;
+  else if (btn.dataset.action === 'next') state.page++;
+  else if (btn.dataset.page) state.page = parseInt(btn.dataset.page);
+  renderTable();
+});
+
+// 企业页事件
+document.getElementById('entRegion').addEventListener('change', e => {
+  state.entRegion = e.target.value;
+  renderEnterpriseAll();
+});
+document.getElementById('entGrowthRange').addEventListener('change', e => {
+  state.entGrowthRange = parseInt(e.target.value);
+  renderEntGrowth();
+});
+document.getElementById('entTotalTrendRange').addEventListener('change', e => {
+  state.entTotalTrendRange = parseInt(e.target.value);
+  renderEntTotalTrend();
+});
+document.querySelectorAll('#entGrowthGranularity button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#entGrowthGranularity button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.entGrowthGranularity = btn.dataset.g;
+    renderEntGrowth();
+  });
+});
+
+// 企业 KPI 卡片点击下钻
+document.querySelectorAll('#entKpiGrid .kpi-card.clickable').forEach(card => {
+  card.addEventListener('click', () => openEntDetail(card.dataset.drill));
+});
+document.getElementById('entDetailBack').addEventListener('click', closeEntDetail);
+document.getElementById('entDetailRegion').addEventListener('change', e => {
+  state.entDetail.region = e.target.value;
+  state.entDetail.page = 1;
+  renderEntDetail();
+});
+document.getElementById('entDetailSearch').addEventListener('input', e => {
+  state.entDetail.search = e.target.value;
+  state.entDetail.page = 1;
+  renderEntDetail();
+});
+document.getElementById('entDetailPagControls').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.action === 'prev') state.entDetail.page--;
+  else if (btn.dataset.action === 'next') state.entDetail.page++;
+  else if (btn.dataset.page) state.entDetail.page = parseInt(btn.dataset.page);
+  renderEntDetail();
+});
+
+// Tab 切换
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('view-device').classList.toggle('hidden', tab.dataset.view !== 'device');
+    document.getElementById('view-enterprise').classList.toggle('hidden', tab.dataset.view !== 'enterprise');
+    // 切到企业 tab 时,默认回到企业概览页
+    if (tab.dataset.view === 'enterprise') {
+      closeEntDetail();
+    }
+    // 切回设备页时 resize,防止 tab 隐藏期间尺寸错位
+    if (tab.dataset.view === 'device') {
+      setTimeout(() => {
+        productBarChart.resize(); modelBarChart.resize(); categoryBarChart.resize();
+        fwBarChart.resize(); tslBarChart.resize(); profileBarChart.resize();
+        enterpriseBarChart.resize(); totalTrendChart.resize(); growthChart.resize();
+      }, 0);
+    } else {
+      setTimeout(() => { entGrowthChart.resize(); entTotalTrendChart.resize(); }, 0);
+    }
+  });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  document.getElementById('updateTime').textContent = new Date().toLocaleString('zh-CN', { hour12: false });
+});
+
+window.addEventListener('resize', () => {
+  productBarChart.resize();
+  modelBarChart.resize();
+  categoryBarChart.resize();
+  fwBarChart.resize();
+  tslBarChart.resize();
+  profileBarChart.resize();
+  enterpriseBarChart.resize();
+  totalTrendChart.resize();
+  growthChart.resize();
+  entGrowthChart.resize();
+  entTotalTrendChart.resize();
+});
+
+// ============ 初始渲染 ============
+function renderAll() {
+  renderKPI();
+  renderProductBar();
+  renderModelBar();
+  renderCategoryBar();
+  renderFwBar();
+  renderTslBar();
+  renderProfileBar();
+  renderEnterpriseBar();
+  renderTotalTrendBar();
+  renderGrowth();
+  renderTable();
+  renderEnterpriseAll();
+}
+document.getElementById('updateTime').textContent = new Date().toLocaleString('zh-CN', { hour12: false });
+renderAll();
+</script>
+
+</body>
+</html>
